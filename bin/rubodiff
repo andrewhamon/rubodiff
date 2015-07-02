@@ -1,0 +1,35 @@
+#!/usr/bin/env ruby
+puts `
+GREEN='\\033[0;32m'
+# The ampersand at the end of this line makes this command run in the background...
+rubocop --format simple --out ~/rubocop_results_current_branch.txt &
+
+# ...while all this runs in the foreground...
+mkdir -p ~/rubodiff_temp
+rm -rf   ~/rubodiff_temp/*
+git archive develop | tar -x -C ~/rubodiff_temp
+rubocop --format simple --out ~/rubocop_results_develop.txt ~/rubodiff_temp
+# Normalize the filenames that rubocop prints
+sed -E -i '' 's/\\/Users\\/[^\\/]+\\/rubodiff_temp\\///g' ~/rubocop_results_develop.txt
+
+# ...and this waits until everything is done...
+wait
+sed -E -i '' 's/[0-9]+[[:space:]]+files[[:space:]]+inspected,[[:space:]]+//g' ~/rubocop_results_develop.txt ~/rubocop_results_current_branch.txt
+
+# ...and finally a diff is printed.
+{
+  # Hack to prevent annoying copyright info from being printed
+  colordiff -U0 -F "==" ~/rubocop_results_develop.txt ~/rubocop_results_current_branch.txt | tee ~/rubodiff_results.txt
+} &> /dev/null
+cat ~/rubodiff_results.txt
+
+if [[ ! -s ~/rubodiff_results.txt ]] ; then
+  echo "${GREEN}There were no changes in rubocop."
+fi ;
+
+# Cleanup
+rm ~/rubocop_results_current_branch.txt
+rm ~/rubocop_results_develop.txt
+rm ~/rubodiff_results.txt
+rm -rf ~/rubodiff_temp
+`
